@@ -1,43 +1,68 @@
-# Iranian License Plate OCR
+# Iranian License Plate Recognition
 
-An end-to-end deep learning project for detecting and recognizing characters from Iranian license plate images.
+An end-to-end deep learning and computer vision system for detecting and recognizing Iranian license plates from full vehicle images.
 
-The system uses two trained models:
+The project uses three trained neural-network models:
 
-1. **YOLO11n** for detecting individual characters inside a license plate.
-2. **CNN classifier** for recognizing each detected character.
+1. **YOLO License Plate Detector** — locates the license plate in a full vehicle image.
+2. **YOLO Character Detector** — locates individual characters inside the detected plate.
+3. **CNN Character Classifier** — recognizes each detected character.
 
-The final pipeline receives an image of an Iranian license plate and returns the predicted plate text.
+The final pipeline can receive a full image of a vehicle and return the predicted Iranian license plate text.
 
 ---
 
 ## Project Overview
 
-The project is divided into two main machine learning tasks:
+The system is divided into three main machine learning stages.
 
-### 1. Character Detection
+### 1. License Plate Detection
 
-A YOLO object detection model is trained to locate individual characters inside the license plate.
+The first YOLO model receives a full vehicle image and detects the location of the license plate.
 
-The detector has only one object class:
+Its job is to answer:
 
 ```text
-character
+Where is the license plate?
 ```
 
-Its job is only to answer:
+The detector uses one object class:
+
+```text
+0 = license_plate
+```
+
+Its output is a bounding box around the detected plate.
+
+---
+
+### 2. Character Detection
+
+After the license plate is detected, the plate region is cropped from the original image.
+
+The cropped plate is then passed to a second YOLO model.
+
+This model detects the location of individual characters inside the plate.
+
+Its job is to answer:
 
 ```text
 Where are the characters?
 ```
 
-It does not determine which character was detected.
+The detector uses one object class:
+
+```text
+0 = character
+```
+
+The detected character bounding boxes are sorted from left to right before classification.
 
 ---
 
-### 2. Character Classification
+### 3. Character Classification
 
-After YOLO detects the characters, each detected region is cropped and passed to a CNN classifier.
+Each detected character is cropped and passed to a Convolutional Neural Network.
 
 The CNN answers:
 
@@ -45,24 +70,30 @@ The CNN answers:
 Which character is this?
 ```
 
-The classifier was trained on 31 character classes.
+The classifier was trained on 31 Iranian license plate character classes.
 
 ---
 
-## System Pipeline
+# Complete System Pipeline
 
 The complete recognition pipeline is:
 
 ```text
-License Plate Image
+Full Vehicle Image
+        ↓
+YOLO License Plate Detector
+        ↓
+License Plate Bounding Box
+        ↓
+Crop License Plate
         ↓
 YOLO Character Detector
         ↓
 Character Bounding Boxes
         ↓
-Sort Bounding Boxes Left-to-Right
+Sort Characters Left-to-Right
         ↓
-Crop Characters
+Crop Individual Characters
         ↓
 Resize to 32 × 64
         ↓
@@ -72,14 +103,27 @@ Normalize Pixel Values
         ↓
 CNN Character Classifier
         ↓
-Predicted Characters
+Predicted Character Labels
         ↓
 Final License Plate Text
 ```
 
+The system therefore contains:
+
+```text
+YOLO Model #1
+→ License Plate Detection
+
+YOLO Model #2
+→ Character Detection
+
+CNN Model
+→ Character Classification
+```
+
 ---
 
-## Project Structure
+# Project Structure
 
 ```text
 iranian-license-plate-ocr/
@@ -88,16 +132,25 @@ iranian-license-plate-ocr/
 │   ├── train/
 │   ├── validation/
 │   ├── test/
-│   └── yolo_dataset/
+│   │
+│   ├── yolo_dataset/
+│   │
+│   ├── plate_train/
+│   ├── plate_validation/
+│   ├── plate_test/
+│   │
+│   └── plate_yolo_dataset/
 │
 ├── models/
 │   ├── license_plate_character_cnn.keras
 │   ├── license_plate_character_detector.pt
+│   ├── license_plate_detector.pt
 │   └── class_mapping.json
 │
 ├── src/
 │   ├── read_annotation.ipynb
 │   ├── train_character_detector.ipynb
+│   ├── train_plate_detector.ipynb
 │   └── Inference.ipynb
 │
 ├── requirements.txt
@@ -105,39 +158,43 @@ iranian-license-plate-ocr/
 └── README.md
 ```
 
+The large datasets and YOLO training run directories are excluded from Git using `.gitignore`.
+
 ---
 
-## Notebook Description
+# Notebook Description
 
-### `read_annotation.ipynb`
+## `read_annotation.ipynb`
 
-This notebook contains the character classification pipeline.
+This notebook contains the CNN character classification pipeline.
 
 Main tasks:
 
 - Parse XML annotation files
+- Read character labels
 - Extract character bounding boxes
+- Validate bounding box coordinates
 - Crop individual characters
 - Resize characters to `32 × 64`
 - Convert images to grayscale
 - Normalize pixel values
 - Encode character labels
-- Prepare train, validation and test datasets
+- Prepare train, validation, and test datasets
 - Build the CNN architecture
 - Train the CNN classifier
-- Evaluate the model
+- Evaluate the classifier
 - Analyze incorrect predictions
-- Generate a confusion matrix
+- Generate confusion matrices
 - Save the trained CNN model
-- Save the class mapping
+- Save the character class mapping
 
-The trained model is saved as:
+The trained CNN is stored as:
 
 ```text
 models/license_plate_character_cnn.keras
 ```
 
-The label mapping is saved as:
+The class mapping is stored as:
 
 ```text
 models/class_mapping.json
@@ -145,7 +202,7 @@ models/class_mapping.json
 
 ---
 
-### `train_character_detector.ipynb`
+## `train_character_detector.ipynb`
 
 This notebook contains the YOLO character detection pipeline.
 
@@ -153,21 +210,24 @@ Main tasks:
 
 - Read character bounding boxes from XML annotations
 - Convert XML bounding boxes to YOLO format
-- Generate YOLO labels
-- Build the YOLO dataset structure
+- Generate YOLO annotation files
+- Build the YOLO character dataset
 - Configure the YOLO dataset
 - Load a pretrained YOLO11n model
-- Fine-tune YOLO on Iranian license plate characters
+- Fine-tune YOLO for character detection
 - Evaluate the detector
-- Save the best trained detector
+- Test character detection
+- Sort character bounding boxes
+- Crop detected characters
+- Connect YOLO detections to the CNN classifier
 
-The final detector is stored as:
+The final trained detector is stored as:
 
 ```text
 models/license_plate_character_detector.pt
 ```
 
-The YOLO model detects only one class:
+The detector uses one class:
 
 ```text
 0 = character
@@ -175,45 +235,94 @@ The YOLO model detects only one class:
 
 ---
 
-### `Inference.ipynb`
+## `train_plate_detector.ipynb`
 
-This notebook contains the final end-to-end inference pipeline.
+This notebook contains the license plate detection pipeline.
 
-It loads:
+Its purpose is to detect the entire license plate from a full vehicle image.
+
+Main tasks:
+
+- Read vehicle image XML annotations
+- Extract the annotation labeled as the full plate region
+- Visualize license plate bounding boxes
+- Convert plate annotations to YOLO format
+- Validate and clip bounding box coordinates
+- Build the YOLO plate detection dataset
+- Create train, validation, and test splits
+- Configure the plate detection dataset
+- Load a pretrained YOLO11n model
+- Fine-tune YOLO for license plate detection
+- Evaluate the trained plate detector
+- Detect plates in full vehicle images
+- Crop detected plates
+- Connect the plate detector to the OCR pipeline
+
+The plate detector uses one class:
 
 ```text
-YOLO Character Detector
-+
-CNN Character Classifier
-+
-Character Class Mapping
+0 = license_plate
 ```
 
-The notebook receives the path of a license plate image and performs the following operations automatically:
+The final trained detector should be stored as:
 
 ```text
-Image
-↓
-Character Detection
-↓
-Bounding Box Sorting
-↓
-Character Cropping
-↓
-Preprocessing
-↓
-CNN Classification
-↓
-Plate Text
+models/license_plate_detector.pt
 ```
 
 ---
 
+## `Inference.ipynb`
+
+This notebook contains the final inference pipeline.
+
+It loads all three trained models:
+
+```text
+YOLO License Plate Detector
++
+YOLO Character Detector
++
+CNN Character Classifier
+```
+
+It also loads:
+
+```text
+Character Class Mapping
+```
+
+The notebook can process a full vehicle image and perform:
+
+```text
+Vehicle Image
+↓
+License Plate Detection
+↓
+Plate Cropping
+↓
+Character Detection
+↓
+Character Sorting
+↓
+Character Cropping
+↓
+CNN Preprocessing
+↓
+Character Classification
+↓
+Final Plate Text
+```
+
+This notebook is the main entry point for using the trained system.
+
+---
+
+# CNN Character Classifier
+
+The character classifier is implemented using TensorFlow / Keras.
+
 ## CNN Architecture
-
-The character classifier uses a Convolutional Neural Network.
-
-Architecture:
 
 ```text
 Input: 64 × 32 × 1
@@ -249,7 +358,7 @@ Metric: Accuracy
 
 ---
 
-## CNN Performance
+# CNN Performance
 
 The CNN was evaluated on the test dataset.
 
@@ -260,21 +369,21 @@ Test Accuracy: 97.38%
 Test Loss: 0.117
 ```
 
-The model was also evaluated using a confusion matrix to analyze the most common character classification errors.
+A confusion matrix was also generated to analyze the most common classification errors.
 
 ---
 
-## YOLO Character Detector
+# YOLO Character Detector
 
-The object detector is based on:
+The character detector is based on:
 
 ```text
 YOLO11n
 ```
 
-A pretrained YOLO11n model was fine-tuned using the license plate character bounding boxes from the dataset.
+A pretrained YOLO11n model was fine-tuned using character-level bounding boxes extracted from the original XML annotations.
 
-Training configuration:
+Training configuration used during the initial experiment:
 
 ```text
 Epochs: 3
@@ -283,13 +392,13 @@ Batch Size: 16
 Device: Apple MPS
 ```
 
-Training was performed using the GPU of an Apple M3 system through PyTorch MPS.
+The model was trained using the Apple Silicon GPU through PyTorch MPS.
 
 ---
 
-## YOLO Validation Results
+# Character Detector Validation Results
 
-Final validation results:
+Final validation results from the trained character detector:
 
 ```text
 Precision: 0.973
@@ -298,13 +407,39 @@ mAP50: 0.989
 mAP50-95: 0.684
 ```
 
-These results show that the model can detect most characters in license plate images with high precision and recall.
+The detector successfully locates individual characters inside Iranian license plates with high precision and recall.
 
 ---
 
-## Bounding Box Format
+# License Plate Detector
 
-The original dataset contains bounding boxes in XML format:
+A second YOLO11n model is used to locate the license plate itself from a full vehicle image.
+
+Unlike the character detector, this model receives images containing the entire vehicle.
+
+Its task is:
+
+```text
+Full Vehicle Image
+↓
+Detect License Plate
+```
+
+The dataset contains an XML object representing the complete plate region:
+
+```text
+کل ناحیه پلاک
+```
+
+Only this object is used when training the plate detector.
+
+Other character annotations in the same XML files are ignored during plate-level detection training.
+
+---
+
+# Plate Detection Annotation Format
+
+The source dataset stores bounding boxes as:
 
 ```text
 xmin
@@ -313,7 +448,7 @@ xmax
 ymax
 ```
 
-For YOLO training, the annotations are converted to:
+For YOLO training, they are converted to:
 
 ```text
 class_id
@@ -323,27 +458,51 @@ width
 height
 ```
 
-The coordinates are normalized relative to the image width and height.
+All YOLO coordinates are normalized relative to the image dimensions.
 
 Example:
 
 ```text
-0 0.35 0.52 0.08 0.30
+0 0.41 0.55 0.22 0.08
 ```
 
 Where:
 
 ```text
-0       = character class
-0.35    = normalized x center
-0.52    = normalized y center
-0.08    = normalized width
-0.30    = normalized height
+0       = license_plate class
+0.41    = normalized x center
+0.55    = normalized y center
+0.22    = normalized width
+0.08    = normalized height
 ```
+
+Bounding boxes are also clipped to the valid image boundaries before generating YOLO labels.
 
 ---
 
-## Character Preprocessing
+# Character Detection Annotation Format
+
+Character annotations are converted to the same YOLO representation:
+
+```text
+0 x_center y_center width height
+```
+
+Where:
+
+```text
+0 = character
+```
+
+The character detector does not classify the character.
+
+It only determines where a character exists.
+
+Character identity is determined later by the CNN classifier.
+
+---
+
+# Character Preprocessing
 
 Before a detected character is passed to the CNN, the following preprocessing is applied:
 
@@ -356,18 +515,18 @@ Convert BGR to Grayscale
 ↓
 Convert to float32
 ↓
-Normalize to range 0–1
+Normalize Pixel Values to 0–1
 ↓
 Add Channel Dimension
 ```
 
-The final CNN input shape for one character is:
+The final shape of one character is:
 
 ```text
 (64, 32, 1)
 ```
 
-For multiple detected characters:
+For multiple characters:
 
 ```text
 (number_of_characters, 64, 32, 1)
@@ -375,11 +534,46 @@ For multiple detected characters:
 
 ---
 
-## Installation
+# Plate Recognition Function
+
+The complete pipeline can be represented conceptually as:
+
+```python
+recognize_plate_from_vehicle(image_path)
+```
+
+The function:
+
+1. Loads the full vehicle image
+2. Detects the license plate
+3. Selects the detected plate
+4. Crops the plate
+5. Detects individual characters
+6. Sorts characters from left to right
+7. Crops each character
+8. Preprocesses character images
+9. Passes them to the CNN
+10. Converts CNN predictions to labels
+11. Builds the final plate text
+
+Example conceptual result:
+
+```python
+{
+    "plate_text": "...",
+    "labels": [...],
+    "plate_crop": ...,
+    "plate_confidence": ...
+}
+```
+
+---
+
+# Installation
 
 Create a Python virtual environment.
 
-Example on macOS/Linux:
+On macOS/Linux:
 
 ```bash
 python3 -m venv ai1_env
@@ -391,7 +585,7 @@ Activate it:
 source ai1_env/bin/activate
 ```
 
-Install project dependencies:
+Install the dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -399,13 +593,14 @@ pip install -r requirements.txt
 
 ---
 
-## Main Libraries
+# Main Libraries
 
-The main libraries used in this project are:
+The main technologies and libraries used in this project are:
 
 ```text
 Python
-TensorFlow / Keras
+TensorFlow
+Keras
 PyTorch
 Ultralytics YOLO
 OpenCV
@@ -413,11 +608,13 @@ NumPy
 Matplotlib
 Scikit-learn
 ElementTree
+Jupyter Notebook
+Git
 ```
 
 ---
 
-## Running the Project
+# Running the Project
 
 Open:
 
@@ -428,40 +625,55 @@ src/Inference.ipynb
 Make sure the trained models exist:
 
 ```text
+models/license_plate_detector.pt
 models/license_plate_character_detector.pt
 models/license_plate_character_cnn.keras
 models/class_mapping.json
 ```
 
-Then provide the path of the input license plate image.
+Provide the path to a full vehicle image.
 
 Example:
 
 ```python
-image_path = "/path/to/license_plate.jpg"
+image_path = "/path/to/vehicle.jpg"
 ```
 
-Run the prediction function:
+Run the full recognition pipeline:
 
 ```python
-plate = predict_plate(image_path)
-
-print("Predicted Plate:", plate)
+result = recognize_plate_from_vehicle(image_path)
 ```
 
-The pipeline automatically:
+Example:
 
-1. Loads the image
-2. Detects characters using YOLO
-3. Sorts detected characters from left to right
-4. Crops each character
-5. Preprocesses the character images
-6. Classifies them using the CNN
-7. Builds the final plate text
+```python
+if result is None:
+    print("No plate detected.")
+else:
+    print("Predicted Plate:", result["plate_text"])
+    print("Plate Confidence:", result["plate_confidence"])
+```
 
 ---
 
-## Example Prediction
+# Recognition Example
+
+The system performs:
+
+```text
+Vehicle Image
+↓
+Plate Detected
+↓
+Plate Cropped
+↓
+Characters Detected
+↓
+Characters Classified
+↓
+Plate Text Returned
+```
 
 Example predicted character list:
 
@@ -469,173 +681,352 @@ Example predicted character list:
 ['1', '3', 'ب', '1', '1', '1', '1', '0']
 ```
 
-The detected characters are ordered based on their horizontal bounding box position.
-
-Because Persian text is right-to-left while numbers are left-to-right, displaying mixed Persian and numeric plate text may require Unicode bidirectional handling.
+Because Persian characters use right-to-left text direction while digits are rendered left-to-right, mixed Persian and numeric plate text may require Unicode bidirectional handling when displayed.
 
 ---
 
-## Dataset
+# Datasets
 
-The dataset contains Iranian license plate images and XML annotation files.
+The project currently uses two related datasets.
 
-Each image has a corresponding XML file containing multiple character annotations.
+## Character Recognition Dataset
 
-Example:
+Used for:
 
 ```text
-00001.jpg
-00001.xml
+Character Detection
++
+Character Classification
+```
+
+Structure:
+
+```text
+data/
+├── train/
+├── validation/
+└── test/
+```
+
+Each image has a corresponding XML annotation file containing individual character labels and bounding boxes.
+
+---
+
+## License Plate Detection Dataset
+
+Used for:
+
+```text
+Full Vehicle Image
+→ License Plate Detection
+```
+
+Structure:
+
+```text
+data/
+├── plate_train/
+├── plate_validation/
+└── plate_test/
 ```
 
 Each XML annotation contains:
 
 ```text
-Character label
-Bounding box coordinates
-```
-
-The dataset is separated into:
-
-```text
-Train
-Validation
-Test
-```
-
----
-
-## Annotation Issues
-
-A small number of dataset annotations contain invalid coordinates or extremely small images.
-
-During YOLO training, Ultralytics automatically ignored corrupted images or labels.
-
-Examples of detected problems included:
-
-```text
-Bounding boxes outside image boundaries
-Non-normalized YOLO coordinates
-Images smaller than the minimum supported size
-```
-
-The majority of the dataset remained valid and was successfully used for training.
-
----
-
-## Current Limitation
-
-The current system expects the input image to contain the license plate itself.
-
-For example:
-
-```text
-License plate image
-→ Supported
-```
-
-But a full vehicle image such as:
-
-```text
-Car image
-→ License plate somewhere inside the image
-```
-
-is not currently handled automatically.
-
-The existing YOLO detector was trained to detect **characters inside a plate**, not the plate itself.
-
----
-
-## Future Improvement: License Plate Detection
-
-To support full vehicle images, another object detection model can be added before the current pipeline.
-
-The future architecture would become:
-
-```text
-Full Vehicle Image
-        ↓
-License Plate Detector
-        ↓
-Crop License Plate
-        ↓
-Character Detector
-        ↓
-Crop Characters
-        ↓
-CNN Character Classifier
-        ↓
-License Plate Text
-```
-
-This would require a dataset containing:
-
-```text
-Vehicle images
+Full plate bounding box
 +
-License plate bounding boxes
+Individual character annotations
 ```
 
-A YOLO model could then be trained with:
+For the plate detector, only the object representing:
 
 ```text
-class 0 = license_plate
+کل ناحیه پلاک
 ```
 
-The final system would therefore contain:
+is used.
+
+---
+
+# Generated YOLO Datasets
+
+The project generates separate YOLO datasets for the two detection tasks.
+
+Character detection:
 
 ```text
-YOLO Model #1
-→ Detect license plate
+data/yolo_dataset/
+```
 
-YOLO Model #2
-→ Detect characters
+Plate detection:
 
-CNN
-→ Classify characters
+```text
+data/plate_yolo_dataset/
+```
+
+Typical structure:
+
+```text
+images/
+├── train/
+├── validation/
+└── test/
+
+labels/
+├── train/
+├── validation/
+└── test/
+
+data.yaml
+```
+
+The YAML configuration tells YOLO:
+
+```text
+Where the dataset is located
+Where train data is located
+Where validation data is located
+Where test data is located
+Which object classes exist
 ```
 
 ---
 
-## Possible Future Improvements
+# Dataset and Annotation Issues
 
-Future versions of this project may include:
+Some source annotations contain invalid or unusual coordinates.
 
-- License plate detection from full vehicle images
-- Automatic perspective correction
+Examples encountered during development include:
+
+```text
+Coordinates outside image boundaries
+Floating-point coordinates such as 435.0
+Very small images
+Invalid YOLO-normalized coordinates
+```
+
+The preprocessing pipeline handles these cases by:
+
+```text
+Parsing coordinates as numeric values
+Clipping bounding boxes to image boundaries
+Skipping invalid bounding boxes
+```
+
+Some corrupted samples may also be ignored automatically by Ultralytics during training.
+
+---
+
+# Current Capabilities
+
+The current project supports:
+
+```text
+[Completed] XML annotation parsing
+
+[Completed] Character preprocessing
+
+[Completed] CNN character classifier
+
+[Completed] CNN test evaluation
+
+[Completed] Character confusion matrix analysis
+
+[Completed] YOLO character dataset generation
+
+[Completed] YOLO character detector
+
+[Completed] Character bounding box sorting
+
+[Completed] Character cropping
+
+[Completed] CNN + Character YOLO integration
+
+[Completed] License plate detection dataset preparation
+
+[Completed] YOLO license plate detector
+
+[Completed] License plate cropping from full vehicle images
+
+[Completed] Plate Detector + Character Detector + CNN integration
+
+[Completed] End-to-end full vehicle image recognition
+```
+
+---
+
+# Current System Architecture
+
+```text
+                  Vehicle Image
+                       ↓
+             License Plate Detector
+                       ↓
+                  Plate Crop
+                       ↓
+              Character Detector
+                       ↓
+                Character Crops
+                       ↓
+                CNN Classifier
+                       ↓
+                License Plate Text
+```
+
+---
+
+# Planned Real-World Architecture
+
+A future deployment may use the recognition system as an edge AI component.
+
+Example:
+
+```text
+Camera
+↓
+Raspberry Pi AI Device
+↓
+Plate Recognition Pipeline
+↓
+Recognized Plate
+↓
+HTTP / REST API
+↓
+Node.js Backend
+↓
+Authorization / Database
+↓
+Gate Control
+```
+
+The AI device should perform image processing and recognition.
+
+The backend should remain responsible for:
+
+```text
+Authorization
+Database access
+User permissions
+Event logging
+Gate control
+Smart-home business logic
+```
+
+This keeps the AI recognition component separate from the main system backend.
+
+---
+
+# Planned Live Camera Support
+
+The image-based pipeline can later be connected to an OpenCV camera stream.
+
+Conceptually:
+
+```text
+Camera
+↓
+Video Frame
+↓
+Plate Recognition Pipeline
+↓
+Predicted Plate
+```
+
+Instead of passing an image path, OpenCV frames can be passed directly to the trained models.
+
+For a real deployment, additional features will be useful:
+
+```text
+Frame skipping
+Duplicate plate suppression
+Tracking
+Confidence filtering
+Request retry handling
+Local logging
+Backend communication
+```
+
+---
+
+# Possible Future Improvements
+
+Possible future improvements include:
+
+- Real-time camera recognition
+- Raspberry Pi deployment
+- Node.js backend integration
+- REST API communication
+- Duplicate plate detection suppression
+- Vehicle tracking
+- License plate super-resolution
+- Image enhancement for low-quality plate crops
+- Sharpening and denoising
 - Improved handling of rotated plates
-- Improved character ordering
-- Better handling of Persian RTL/LTR text
-- Character detector training for more epochs
+- Perspective correction
+- More plate detector training epochs
 - Data augmentation
-- Handling multiple license plates in one image
-- Real-time video recognition
-- Web or mobile interface
-- API deployment
-- End-to-end license plate recognition service
+- Improved low-light recognition
+- Multiple vehicle / multiple plate detection
+- Vehicle make and model recognition
+- Vehicle color recognition
+- Parking management integration
+- Smart gate integration
+- API service deployment
 
 ---
 
-## Technologies Used
+# Plate Image Enhancement
 
-- Python
-- TensorFlow
-- Keras
-- PyTorch
-- Ultralytics YOLO
-- OpenCV
-- NumPy
-- Matplotlib
-- Scikit-learn
-- Jupyter Notebook
-- Git
+Low-resolution and distant license plates may produce low-quality plate crops.
+
+A possible future stage could be added between plate detection and character detection:
+
+```text
+Plate Detection
+↓
+Plate Crop
+↓
+Image Enhancement / Super Resolution
+↓
+Character Detection
+↓
+CNN Classification
+```
+
+Possible techniques include:
+
+```text
+OpenCV sharpening
+Denoising
+Super-resolution
+Real-ESRGAN
+Dedicated plate enhancement models
+```
+
+This feature is not required for the current recognition pipeline.
 
 ---
 
-## Hardware Used During Development
+# Vehicle Information Recognition
 
-The project was developed and trained on:
+Another possible extension is vehicle attribute recognition.
+
+Future architecture:
+
+```text
+Vehicle Image
+├── License Plate Recognition
+├── Vehicle Make / Model Recognition
+└── Vehicle Color Recognition
+```
+
+These tasks would require separate datasets and models.
+
+---
+
+# Hardware Used During Development
+
+Development and model training were performed on:
 
 ```text
 Apple MacBook Air M3
@@ -649,30 +1040,72 @@ YOLO training used:
 PyTorch MPS
 ```
 
-which allows PyTorch workloads to run on the Apple GPU.
+which allows compatible PyTorch workloads to run on the Apple GPU.
 
 ---
 
-## Project Status
+# Git and Generated Files
 
-Current status:
+Large datasets and YOLO experiment outputs should not normally be committed to Git.
+
+Examples:
 
 ```text
-[Completed] XML annotation parsing
-[Completed] Character preprocessing
-[Completed] CNN character classifier
-[Completed] CNN evaluation
-[Completed] YOLO dataset generation
-[Completed] YOLO character detector
-[Completed] Character bounding box sorting
-[Completed] Character cropping
-[Completed] CNN + YOLO integration
-[Completed] End-to-end plate image inference
-[Planned] License plate detection from full vehicle images
+data/
+src/runs/
+```
+
+The final trained models should be stored in:
+
+```text
+models/
+```
+
+This keeps the repository focused on:
+
+```text
+Source code
+Jupyter notebooks
+Model artifacts
+Documentation
+Configuration
 ```
 
 ---
 
-## Author
+# Project Status
 
-Developed as a deep learning and computer vision learning project for Iranian license plate recognition.
+Current project status:
+
+```text
+[Completed] Character classification model
+[Completed] Character detection model
+[Completed] License plate detection model
+[Completed] Full vehicle image input
+[Completed] License plate cropping
+[Completed] End-to-end OCR pipeline
+
+[Planned] Live camera deployment
+[Planned] Raspberry Pi deployment
+[Planned] Backend integration
+[Planned] Vehicle color recognition
+[Planned] Vehicle make/model recognition
+[Planned] Plate image enhancement
+```
+
+---
+
+# Author
+
+Developed as a deep learning and computer vision project for Iranian license plate detection and recognition.
+
+The project was built incrementally to study and implement:
+
+- Image preprocessing
+- CNN classification
+- Object detection
+- YOLO
+- XML annotation processing
+- Model evaluation
+- Multi-model inference pipelines
+- Computer vision system integration
